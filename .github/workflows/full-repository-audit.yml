@@ -19,20 +19,22 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout complete repository history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
           submodules: recursive
+          persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
           build-mode: autobuild
           queries: security-extended
 
       - name: Analyze Java source
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: /language:java-kotlin
 
@@ -42,10 +44,12 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout complete repository history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
           submodules: recursive
+          persist-credentials: false
 
       - name: Run Semgrep security rules
         continue-on-error: true
@@ -66,14 +70,14 @@ jobs:
       - name: Upload Semgrep SARIF
         if: always() && hashFiles('reports/semgrep.sarif') != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/semgrep.sarif
           category: semgrep
 
       - name: Archive Semgrep report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: semgrep-report
           path: reports/
@@ -85,10 +89,12 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout complete repository history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
           submodules: recursive
+          persist-credentials: false
 
       - name: Run Trivy full filesystem scan
         continue-on-error: true
@@ -107,14 +113,14 @@ jobs:
       - name: Upload Trivy SARIF
         if: always() && hashFiles('reports/trivy.sarif') != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/trivy.sarif
           category: trivy
 
       - name: Archive Trivy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: trivy-report
           path: reports/
@@ -126,18 +132,20 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout complete repository history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Scan all Git history for secrets
+      - name: Scan all Git history for secrets (report findings without failing the job)
         continue-on-error: true
         run: |
           mkdir -p reports
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/repo" \
-            zricethezav/gitleaks:latest \
+            zricethezav/gitleaks:v8.30.1 \
             git --redact \
+              --exit-code 0 \
               --report-format sarif \
               --report-path /repo/reports/gitleaks.sarif \
               /repo
@@ -145,14 +153,14 @@ jobs:
       - name: Upload Gitleaks SARIF
         if: always() && hashFiles('reports/gitleaks.sarif') != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/gitleaks.sarif
           category: gitleaks
 
       - name: Archive Gitleaks report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: gitleaks-report
           path: reports/
@@ -165,10 +173,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout complete repository history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
           submodules: recursive
+          persist-credentials: false
 
       - name: Scan dependency manifests and lockfiles
         run: |
@@ -181,14 +191,14 @@ jobs:
 
       - name: Upload OSV-Scanner SARIF
         if: always() && hashFiles('reports/osv-scanner.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/osv-scanner.sarif
           category: osv-scanner
 
       - name: Archive OSV-Scanner report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: osv-scanner-report
           path: reports/
