@@ -175,8 +175,8 @@ jobs:
           mkdir -p reports
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/src" \
-            ghcr.io/google/osv-scanner:latest \
-            scan --recursive --format sarif /src \
+            ghcr.io/google/osv-scanner:v2.3.3 \
+            scan source --recursive --format sarif /src \
             > "$GITHUB_WORKSPACE/reports/osv-scanner.sarif"
 
       - name: Upload OSV-Scanner SARIF
