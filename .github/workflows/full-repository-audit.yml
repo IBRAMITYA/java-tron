@@ -1,0 +1,159 @@
+name: Full Repository Security Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+concurrency:
+  group: full-security-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  codeql:
+    name: CodeQL - Java source analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout complete repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          build-mode: autobuild
+          queries: security-extended
+
+      - name: Analyze Java source
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:java-kotlin
+
+  semgrep:
+    name: Semgrep - Full source scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout complete repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Run Semgrep security rules
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src" \
+            semgrep/semgrep:latest \
+            semgrep scan \
+              --config p/security-audit \
+              --config p/java \
+              --no-git-ignore \
+              --metrics=off \
+              --sarif \
+              --output /src/reports/semgrep.sarif \
+              /src
+
+      - name: Upload Semgrep SARIF
+        if: always() && hashFiles('reports/semgrep.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/semgrep.sarif
+          category: semgrep
+
+      - name: Archive Semgrep report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: reports/
+          if-no-files-found: ignore
+
+  trivy:
+    name: Trivy - Filesystem, dependencies, secrets and misconfigurations
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout complete repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Run Trivy full filesystem scan
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            aquasec/trivy:latest \
+            fs --scanners vuln,misconfig,secret \
+              --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+              --format sarif \
+              --output reports/trivy.sarif \
+              .
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('reports/trivy.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/trivy.sarif
+          category: trivy
+
+      - name: Archive Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: reports/
+          if-no-files-found: ignore
+
+  gitleaks:
+    name: Gitleaks - Entire Git history
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout complete repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan all Git history for secrets
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            zricethezav/gitleaks:latest \
+            git --redact \
+              --report-format sarif \
+              --report-path /repo/reports/gitleaks.sarif \
+              /repo
+
+      - name: Upload Gitleaks SARIF
+        if: always() && hashFiles('reports/gitleaks.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/gitleaks.sarif
+          category: gitleaks
+
+      - name: Archive Gitleaks report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: reports/
+          if-no-files-found: ignore
